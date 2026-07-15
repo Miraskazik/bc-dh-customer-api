@@ -1,0 +1,243 @@
+openapi: 3.1.0
+info:
+  title: Dog Hotel — Customer API
+  description: >
+    Kontrakt služby bc-dh-customer (evidence zákazníků — majitelů psů).
+    Čisté CRUD se soft delete; mazání jen nastavuje příznak, smazaní zákazníci
+    se v běžných dotazech nevracejí.
+  version: 0.1.0
+  contact:
+    name: Dog Hotel
+    url: https://github.com/Miraskazik/bc-dh-customer-api
+
+servers:
+  - url: http://localhost:8081
+    description: lokální běh (dh-infra)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: customers
+    description: Zákazníci (majitelé psů)
+
+paths:
+  /api/customers:
+    post:
+      tags: [customers]
+      operationId: createCustomer
+      summary: Vytvoří zákazníka
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '201':
+          description: Zákazník vytvořen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags: [customers]
+      operationId: listCustomers
+      summary: Stránkovaný seznam zákazníků s vyhledáváním dle jména/telefonu
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: search
+          in: query
+          description: Fulltext přes jméno a telefon (case-insensitive contains)
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stránka zákazníků
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerPage'
+
+  /api/customers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/CustomerId'
+    get:
+      tags: [customers]
+      operationId: getCustomer
+      summary: Detail zákazníka
+      responses:
+        '200':
+          description: Zákazník
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [customers]
+      operationId: updateCustomer
+      summary: Úprava zákazníka
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '200':
+          description: Zákazník upraven
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [customers]
+      operationId: deleteCustomer
+      summary: Soft delete zákazníka (nastaví deletedAt, data zůstávají)
+      responses:
+        '204':
+          description: Zákazník označen jako smazaný
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak JWT (realm dog-hotel)
+
+  parameters:
+    CustomerId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Číslo stránky (od 0)
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      description: Velikost stránky
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    NotFound:
+      description: Záznam nenalezen (nebo soft-deleted)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    BadRequest:
+      description: Nevalidní požadavek
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  schemas:
+    Customer:
+      type: object
+      description: Zákazník (majitel psů)
+      required: [id, name, phone, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Jméno zákazníka
+        phone:
+          type: string
+          description: Telefonní číslo
+        notes:
+          type: string
+          description: Poznámky
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CustomerRequest:
+      type: object
+      description: Data pro vytvoření/úpravu zákazníka
+      required: [name, phone]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 32
+        notes:
+          type: string
+          maxLength: 2000
+
+    CustomerPage:
+      type: object
+      description: Stránka zákazníků
+      required: [content, page, size, totalElements, totalPages]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+
+    ProblemDetail:
+      type: object
+      description: RFC 9457 problem detail
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
